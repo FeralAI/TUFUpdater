@@ -1,0 +1,6 @@
+{
+	"Start": "Please provide the .hex file to flash and try again: TUFUpdater.exe firmware.hex",
+	"Connect": "Connect the device then double press the reset button to continue.",
+	"Found": "Device found. Starting firmware update:",
+	"NotFound": "Device not found. Please make sure it's connected and in firmware update mode."
+}

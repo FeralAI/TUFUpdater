@@ -9,16 +9,16 @@ namespace TUFUpdater
 	{
 		static void Main(string[] args)
 		{
-			var file = args[0];
+			var file = args.FirstOrDefault();
 			if (string.IsNullOrWhiteSpace(file))
 			{
-				Console.WriteLine("Please provide the firmware file name to flash, relative or full path");
+				Console.WriteLine(Message.Start);
 				return;
 			}
 
 			var timeout = 30000; // 30 second timeout
 			
-			Console.WriteLine("Please connect the controller and double press the reset button quickly to enter firmware update mode");
+			Console.WriteLine(Message.Connect);
 
 			var comm = default(Comm);
 			var stopwatch = Stopwatch.StartNew();
@@ -39,7 +39,7 @@ namespace TUFUpdater
 			stopwatch.Stop();
 			if (comm != null)
 			{
-				Console.WriteLine("Controller found, begin firmware update");
+				Console.WriteLine(Message.Found);
 
 				var path    = Directory.GetCurrentDirectory();
 				var avrCmd  = @$"{path}\tools\avrdude.exe -v -C""{path}\tools\avrdude.conf"" -patmega32u4 -cavr109 -P {comm.DeviceID} -b57600 -D ""-Uflash:w:""{file}"":i""";
@@ -49,7 +49,7 @@ namespace TUFUpdater
 			}
 			else
 			{
-				Console.WriteLine("Controller not found, please make sure it's connected and in firmware update mode");
+				Console.WriteLine(Message.NotFound);
 			}
 		}
 	}
