@@ -19,47 +19,41 @@ namespace TUFUpdater
 
 		static void Main(string[] args)
 		{
-			IConfigurationBuilder configBuilderForMain = new ConfigurationBuilder();
+			var configBuilderForMain = new ConfigurationBuilder();
 			ConfigureConfiguration(configBuilderForMain);
-			IConfiguration config = configBuilderForMain.Build();
+			var config = configBuilderForMain.Build();
 
 			var options = config.GetSection(nameof(BoardOptions));
 			var vid = options.GetValue<string>("VID");
 			var pid = options.GetValue<string>("PID");
 			var file = options.GetValue<string>("Filename");
-			var found = false;
 			var timeout = 30000; // 30 second timeout
 			
 			Console.WriteLine("Please connect the controller and double press the reset button quickly to enter firmware update mode");
 
-			var coms = new List<ComPort>();
+			var com = default(ComPort);
 			var stopwatch = Stopwatch.StartNew();
-			while (!found)
+			while (com == null)
 			{
 				if (stopwatch.ElapsedMilliseconds > timeout)
 					break;
 				
-				List<ComPort> ports = GetSerialPorts();
-
-				//if we want to find one device
-				ComPort com = ports.FindLast(c => c.VID.Equals(vid) && c.PID.Equals(pid));
-
-				//or if we want to extract all devices with specified values:
-				coms = ports.FindAll(c => c.VID.Equals(vid) && c.PID.Equals(pid));
-				
-				found = coms.Count == 1;
+				var ports = GetSerialPorts();
+				com = ports.FirstOrDefault(c => c.VID.Equals(vid) && c.PID.Equals(pid));
 			}
 
 			stopwatch.Stop();
-			if (found)
+			if (com != null)
 			{
 				Console.WriteLine("Controller found, begin firmware update");
-				var port = coms[0].Name;
-				var path = Directory.GetCurrentDirectory();
+
+				var port    = com.Name;
+				var path    = Directory.GetCurrentDirectory();
 				var avrDude = @$"{path}\avrdude.exe";
-				var avrCmd = @$"{avrDude} -v -C""{path}\avrdude.conf"" -patmega32u4 -cavr109 -P {port} -b57600 -D ""-Uflash:w:{file}:i""";
-				var cmdCmd = $"/K {avrCmd}";
+				var avrCmd  = @$"{avrDude} -v -C""{path}\avrdude.conf"" -patmega32u4 -cavr109 -P {port} -b57600 -D ""-Uflash:w:{file}:i""";
+				var cmdCmd  = $"/K {avrCmd}";
 				var process = Process.Start("cmd.exe", cmdCmd);
+
 				process.WaitForExit();
 			}
 			else
@@ -69,9 +63,23 @@ namespace TUFUpdater
 
 		}
 
-		// You can define other methods, fields, classes and namespaces here
-		public struct ComPort // custom struct with our desired values
+		public class ComPort
 		{
+			public ComPort(ManagementBaseObject p)
+			{
+				Name = p.GetPropertyValue("DeviceID").ToString();
+				VID = p.GetPropertyValue("PNPDeviceID").ToString();
+				Description = p.GetPropertyValue("Caption").ToString();
+
+				var mVID = Regex.Match(VID, vidPattern, RegexOptions.IgnoreCase);
+				var mPID = Regex.Match(PID, pidPattern, RegexOptions.IgnoreCase);
+
+				if (mVID.Success)
+					VID = mVID.Groups[1].Value;
+				if (mPID.Success)
+					PID = mPID.Groups[1].Value;
+			}
+
 			public string Name;
 			public string VID;
 			public string PID;
@@ -83,28 +91,11 @@ namespace TUFUpdater
 
 		private static List<ComPort> GetSerialPorts()
 		{
-			using (var searcher = new ManagementObjectSearcher("SELECT * FROM WIN32_SerialPort"))
-			{
-				var ports = searcher.Get().Cast<ManagementBaseObject>().ToList();
-				return ports.Select(p =>
-				{
-					ComPort c = new ComPort();
-					c.Name = p.GetPropertyValue("DeviceID").ToString();
-					c.VID = p.GetPropertyValue("PNPDeviceID").ToString();
-					c.Description = p.GetPropertyValue("Caption").ToString();
-
-					Match mVID = Regex.Match(c.VID, vidPattern, RegexOptions.IgnoreCase);
-					Match mPID = Regex.Match(c.VID, pidPattern, RegexOptions.IgnoreCase);
-
-					if (mVID.Success)
-						c.VID = mVID.Groups[1].Value;
-					if (mPID.Success)
-						c.PID = mPID.Groups[1].Value;
-
-					return c;
-
-				}).ToList();
-			}
+			using var searcher = new ManagementObjectSearcher("SELECT * FROM WIN32_SerialPort");
+			return searcher.Get()
+				.Cast<ManagementBaseObject>()
+				.Select(p => new ComPort(p))
+				.ToList();
 		}
 	}
 }
